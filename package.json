@@ -1,0 +1,12 @@
+{
+  "name": "renovate-test-harness",
+  "private": true,
+  "description": "Local Renovate dry-run harness for AEM demo repos",
+  "scripts": {
+    "postinstall": "aio plugins:install @adobe/aio-cli-plugin-cloudmanager || true"
+  },
+  "devDependencies": {
+    "@adobe/aio-cli": "11.1.2",
+    "renovate": "44.67.1"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":separateMajorReleases",
+    ":combinePatchMinorReleases",
+    ":ignoreUnstable",
+    ":prImmediately",
+    ":semanticPrefixFixDepsChoreOthers",
+    ":updateNotScheduled",
+    ":automergeDisabled",
+    ":prHourlyLimitNone"
+  ],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 10,
+  "rangeStrategy": "bump",
+  "minimumReleaseAge": "7 days",
+  "packageRules": [
+    {
+      "description": "Group all AEM Core Components into a single PR to cut noise.",
+      "matchPackageNames": ["com.adobe.cq:core.wcm.components.**"],
+      "groupName": "AEM Core Components"
+    },
+    {
+      "description": "Group the Babel toolchain.",
+      "matchPackageNames": ["@babel/**", "babel-**"],
+      "groupName": "Babel"
+    },
+    {
+      "description": "Group the webpack toolchain.",
+      "matchPackageNames": ["webpack", "webpack-**", "**-webpack-plugin", "**-loader"],
+      "groupName": "webpack"
+    },
+    {
+      "description": "Group the ESLint / TypeScript-ESLint toolchain.",
+      "matchPackageNames": ["eslint", "eslint-**", "@typescript-eslint/**"],
+      "groupName": "ESLint",
+      "automerge": true
+    },
+    {
+      "description": "Group Cypress.",
+      "matchPackageNames": ["cypress", "cypress-**", "cypress/included"],
+      "groupName": "Cypress"
+    },
+    {
+      "description": "Group the Maven test plugins (surefire + failsafe) — they share a version.",
+      "matchPackageNames": [
+        "org.apache.maven.plugins:maven-surefire-plugin",
+        "org.apache.maven.plugins:maven-failsafe-plugin"
+      ],
+      "groupName": "Maven test plugins",
+      "addLabels": ["mvn-validation-only"],
+      "automerge": true
+    },
+    {
+      "description": "Group npm devDependencies (minor + patch) into one auto-merged PR.",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm dev dependencies - fixes",
+      "automerge": true,
+      "excludePackagePatterns": ["^cypress"]
+    },
+    {
+      "description": "Group Maven test-scoped dependencies (minor + patch) into one auto-merged PR.",
+      "matchManagers": ["maven"],
+      "matchDepTypes": ["test"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "maven test dependencies - fixes",
+      "addLabels": ["mvn-validation-only"],
+      "automerge": true
+    },
+    {
+      "description": "Major updates are never automerged; label them so they stand out.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major-update"]
+    }
+  ],
+  "osvVulnerabilityAlerts": true
+}

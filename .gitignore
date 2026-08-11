@@ -1,0 +1,8 @@
+# installed Renovate
+node_modules/
+
+# scratch: gitea token, run logs, renovate base cache
+.renovate-tmp/
+
+# generated Markdown reports
+renovate-reports/
