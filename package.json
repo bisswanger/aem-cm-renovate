@@ -7,6 +7,6 @@
   },
   "devDependencies": {
     "@adobe/aio-cli": "11.1.2",
-    "renovate": "44.67.1"
+    "renovate": "44.75.1"
   }
 }
