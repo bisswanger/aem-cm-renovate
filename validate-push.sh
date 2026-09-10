@@ -285,12 +285,13 @@ echo ">> selected: $BRANCH"
 git checkout "$BRANCH"
 
 # Build it locally. Maven output is redirected to a per-branch log file under
-# .renovate-tmp/validation/ (instead of the console); on failure its path is printed.
+# renovate-reports/<repo>/verify-logs/ (instead of the console); on failure its
+# path is printed. This matches the layout run-all.sh writes.
 if [ "${SKIP_VERIFY:-}" = "1" ]; then
   echo ">> SKIP_VERIFY=1 — skipping 'mvn clean verify'"
 else
   MVN="mvn"; [ -x "./mvnw" ] && MVN="./mvnw"
-  LOG_DIR="$SCRIPT_DIR/.renovate-tmp/validation"
+  LOG_DIR="$SCRIPT_DIR/renovate-reports/$(basename "$REPO_DIR")/verify-logs"
   mkdir -p "$LOG_DIR"
   # Sanitize the branch name for use in a filename (renovate/foo -> renovate-foo).
   LOG_FILE="$LOG_DIR/$(printf '%s' "$BRANCH" | sed 's#[^A-Za-z0-9._-]#-#g').log"
