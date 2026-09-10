@@ -6,3 +6,6 @@ node_modules/
 
 # generated Markdown reports
 renovate-reports/
+
+# environment secrets file
+.env

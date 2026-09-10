@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
 #  aem-cm-renovate  ·  ALL  (end-to-end driver)
-#  Generate every Renovate branch, validate each with `mvn clean verify`, and
-#  optionally push the ones that pass. DRY-RUN by default.
+#  Generate every Renovate branch, validate each one, and optionally push the
+#  ones that pass. DRY-RUN by default.
 # ══════════════════════════════════════════════════════════════════════════════
 #
 # Steps:
 #   1. run Renovate locally to generate all renovate/* branches (+ per-branch reports)
-#   2. loop over each branch and validate it with `mvn clean verify`
+#   2. loop over each branch and validate it by delegating to validate-push.sh
 #   3. push the branches that validated OK  (only when --push is given)
 #   4. write a promotion summary report
+#
+# Branch validation is NOT reimplemented here: each branch is handed to
+# validate-push.sh, the single source of truth for what "validate a branch"
+# means (mvn clean verify, plus the optional Adobe Cloud Manager pipeline run
+# with --cloud-manager). This keeps run-all and validate-push in lock-step.
 #
 # DRY-RUN by default: it validates and reports what WOULD be pushed, but pushes
 # nothing. Pass --push to actually push the validated branches to origin (CM).
@@ -26,43 +31,62 @@ usage() {
 $PROG — generate, validate, and (optionally) push all Renovate branches.
 
 Runs the full loop for a Cloud Manager checkout: generate every renovate/* branch,
-build each one with 'mvn clean verify', and — only with --push — push the branches
-that pass to origin. A Markdown promotion summary is written at the end.
+validate each one (via validate-push.sh), and — only with --push — push the
+branches that pass to origin. A Markdown promotion summary is written at the end.
+
+Each branch is validated by delegating to validate-push.sh, so run-all performs
+exactly the same checks as promoting a single branch by hand: 'mvn clean verify',
+plus — with --cloud-manager — a real Adobe Cloud Manager pipeline run.
 
 USAGE
-  $PROG <repo-path> [--push] [--skip-generate]
+  $PROG <repo-path> [--push] [--cloud-manager] [--skip-generate]
   $PROG -h | --help
 
 ARGUMENTS
   repo-path        Full path to the target CM checkout. Required; no default.
 
 OPTIONS
-  --push           Push branches that pass 'mvn clean verify' to origin (the CM
-                   remote). Without this flag the script is DRY-RUN: it validates
-                   and reports, but pushes nothing.
+  --push           Push branches that validate OK to origin (the CM remote).
+                   Without this flag the script is DRY-RUN: it validates and
+                   reports, but pushes nothing.
+  --cloud-manager, --cm
+                   For each passing branch, additionally run an Adobe Cloud
+                   Manager pipeline validation (same as validate-push.sh
+                   --cloud-manager). Builds from the CM remote, so it implies
+                   --push. Requires the CM_* environment variables below.
   --skip-generate  Skip step 1 (do not re-run Renovate); validate the renovate/*
                    branches already present in the checkout.
   -h, --help       Show this help and exit.
 
 ENVIRONMENT
   SKIP_VERIFY=1     Skip 'mvn clean verify' (treats every branch as validated).
-                    Useful for a fast dry-run of the loop itself.
+                    Passed through to validate-push.sh. Useful for a fast dry-run
+                    of the loop itself.
   LIMIT=N           Cap the generate step at ~N update branches (default: 0 = unlimited).
   GITHUB_COM_TOKEN  Passed through to the generate step for richer release notes.
   KEEP_GITEA=1      Passed through to the generate step (keep the Gitea container).
 
+  CM_*              Cloud Manager credentials/config consumed by validate-push.sh
+                    when --cloud-manager is given (CM_PROGRAM_ID, CM_PIPELINE_ID,
+                    CM_CLIENT_ID, CM_CLIENT_SECRET, CM_TECHNICAL_ACCOUNT_ID,
+                    CM_TECHNICAL_ACCOUNT_EMAIL, CM_IMS_ORG_ID, CM_SCOPES, and the
+                    optional CM_IMS_ENV / CM_BASE_URL). See 'validate-push.sh --help'.
+
 OUTPUT
   renovate-reports/<repo>/promotion-summary.md   the per-branch result table
-  renovate-reports/<repo>/verify-logs/<branch>.log   full 'mvn' output per branch
+  renovate-reports/<repo>/verify-logs/<branch>.log   validate-push output per branch
+    (validate-push.sh also writes the raw 'mvn' output under
+     .renovate-tmp/validation/<branch>.log)
 
 NOTES
-  - 'mvn clean verify' runs once PER branch, so a full run can take a long time.
+  - Validation runs once PER branch, so a full run can take a long time.
   - --push pushes to the real CM remote for every branch that passes; the flag is
     your explicit opt-in (there is no per-branch prompt). Dry-run is the default.
 
 EXAMPLES
   $PROG /full/path/to/aem-cm-project                 # dry-run: validate + report
   $PROG /full/path/to/aem-cm-project --push          # validate + push passing ones
+  $PROG /full/path/to/aem-cm-project --push --cloud-manager  # + CM pipeline run
   $PROG /full/path/to/aem-cm-project --skip-generate # reuse existing branches
 EOF
 }
@@ -70,16 +94,20 @@ EOF
 # --- parse args ---------------------------------------------------------------
 case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 
-REPO_ARG=""; PUSH=0; SKIP_GENERATE=0
+REPO_ARG=""; PUSH=0; SKIP_GENERATE=0; CM_VALIDATE=0
 for a in "$@"; do
   case "$a" in
-    --push)          PUSH=1 ;;
-    --skip-generate) SKIP_GENERATE=1 ;;
-    -h|--help)       usage; exit 0 ;;
-    -*)              echo "error: unknown option '$a'" >&2; echo >&2; usage >&2; exit 1 ;;
-    *)               [ -z "$REPO_ARG" ] && REPO_ARG="$a" || { echo "error: unexpected argument '$a'" >&2; exit 1; } ;;
+    --push)              PUSH=1 ;;
+    --cloud-manager|--cm) CM_VALIDATE=1 ;;
+    --skip-generate)     SKIP_GENERATE=1 ;;
+    -h|--help)           usage; exit 0 ;;
+    -*)                  echo "error: unknown option '$a'" >&2; echo >&2; usage >&2; exit 1 ;;
+    *)                   [ -z "$REPO_ARG" ] && REPO_ARG="$a" || { echo "error: unexpected argument '$a'" >&2; exit 1; } ;;
   esac
 done
+
+# Cloud Manager validation builds from the CM remote, so it requires a push.
+[ "$CM_VALIDATE" = 1 ] && PUSH=1
 
 if [ -z "$REPO_ARG" ]; then
   echo "error: no repo path given." >&2
@@ -92,7 +120,9 @@ REPO_DIR="$(cd "$REPO_ARG" && pwd)"
 REPO_NAME="$(basename "$REPO_DIR")"
 REPORTS_DIR="$SCRIPT_DIR/renovate-reports/$REPO_NAME"
 
-MODE="DRY-RUN (no push)"; [ "$PUSH" = 1 ] && MODE="PUSH (validated branches → origin)"
+MODE="DRY-RUN (no push)"
+[ "$PUSH" = 1 ] && MODE="PUSH (validated branches → origin)"
+[ "$CM_VALIDATE" = 1 ] && MODE="PUSH + Cloud Manager validation (validated branches → origin)"
 echo ">> repo: $REPO_DIR"
 echo ">> mode: $MODE"
 
@@ -125,41 +155,59 @@ if [ "${#BRANCHES[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# --- step 2 & 3: validate each branch, push the ones that pass -----------------
+# --- step 2 & 3: validate each branch (via validate-push.sh), push passing ones -
+# Branch validation is delegated to validate-push.sh so run-all and the
+# single-branch promote path run the EXACT same checks:
+#   - dry-run   → validate-push.sh <repo> <branch> --dry-run   (verify only)
+#   - --push    → validate-push.sh <repo> <branch> push        (verify + push)
+#   - --cloud-manager adds the CM pipeline run (implies push).
+# SKIP_VERIFY and the CM_* vars are read from the environment by validate-push.sh.
+VALIDATE_PUSH="$SCRIPT_DIR/validate-push.sh"
+[ -x "$VALIDATE_PUSH" ] || { echo "error: validate-push.sh not found/executable at $VALIDATE_PUSH" >&2; exit 1; }
+
 LOGDIR="$REPORTS_DIR/verify-logs"; mkdir -p "$LOGDIR"
-MVN="mvn"; [ -x "./mvnw" ] && MVN="./mvnw"
 sanitize(){ printf '%s' "$1" | sed 's#[^A-Za-z0-9._-]#-#g'; }
 
 declare -a ROWS
 pass=0; fail=0; pushed=0
-echo ">> [2/4] validating ${#BRANCHES[@]} branch(es) with '$MVN clean verify'..."
+echo ">> [2/4] validating ${#BRANCHES[@]} branch(es) via validate-push.sh..."
 i=0
 for b in "${BRANCHES[@]}"; do
   i=$((i+1))
   printf ">> (%d/%d) %s ... " "$i" "${#BRANCHES[@]}" "$b"
-  git checkout -q "$b"
   log="$LOGDIR/$(sanitize "$b").log"
 
-  if [ "${SKIP_VERIFY:-}" = "1" ]; then
-    echo "skipped-verify" ; echo "SKIP_VERIFY=1" > "$log"; ok=1; validation="⏭ skipped"
-  elif "$MVN" clean verify > "$log" 2>&1; then
-    echo "PASS"; ok=1; validation="✅ pass"
+  # Build the validate-push.sh invocation for this branch/mode.
+  vp_args=("$REPO_DIR" "$b")
+  if [ "$PUSH" = 1 ]; then
+    vp_args+=("push")
+    [ "$CM_VALIDATE" = 1 ] && vp_args+=("--cloud-manager")
   else
-    echo "FAIL (see $log)"; ok=0; validation="❌ fail"
+    vp_args+=("--dry-run")
+  fi
+
+  if "$VALIDATE_PUSH" "${vp_args[@]}" > "$log" 2>&1; then
+    ok=1
+  else
+    ok=0
   fi
 
   if [ "$ok" = 1 ]; then
     pass=$((pass+1))
     if [ "$PUSH" = 1 ]; then
-      if git push -u origin "$b" >>"$log" 2>&1; then action="pushed"; pushed=$((pushed+1))
-      else action="push FAILED (see log)"; fi
+      pushed=$((pushed+1))
+      validation="✅ pass"
+      action="pushed"; [ "$CM_VALIDATE" = 1 ] && action="pushed + CM validated"
     else
+      validation="✅ pass"
       action="would push (dry-run)"
     fi
   else
     fail=$((fail+1))
-    action="not pushed (build failed)"
+    validation="❌ fail"
+    action="not pushed (validation failed)"
   fi
+  echo "$validation"
   ROWS+=("| \`$b\` | $validation | $action | [log](verify-logs/$(sanitize "$b").log) |")
 done
 

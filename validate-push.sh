@@ -29,7 +29,7 @@ run (the same validation the GitHub Actions workflow performs). Default is
 Maven-only validation.
 
 USAGE
-  $PROG <repo-path> [branch] [action] [--cloud-manager]
+  $PROG <repo-path> [branch] [action] [--cloud-manager] [--dry-run]
   $PROG -h | --help
 
 ARGUMENTS
@@ -54,10 +54,15 @@ OPTIONS
                           for it to finish. Implies 'push' (the pipeline builds from
                           the CM remote) and is incompatible with 'merge'. Without
                           this flag, validation is Maven-only (the default).
+  --dry-run               Validate only: run 'mvn clean verify' (unless SKIP_VERIFY)
+                          and then quit WITHOUT pushing, merging, or running any
+                          Cloud Manager pipeline — no prompts, no changes. Any
+                          'action' argument is ignored.
   -h, --help              Show this help and exit.
 
 ENVIRONMENT
   SKIP_VERIFY=1   Skip 'mvn clean verify' (e.g. to re-promote a verified branch).
+  DRY_RUN=1       Same as --dry-run: validate, then quit without changes.
 
   Cloud Manager validation — only used with --cloud-manager (mirrors the GitHub
   Actions workflow; auth uses OAuth Server-to-Server credentials):
@@ -91,6 +96,9 @@ EXAMPLES
 
   # maven verify + push + a real Cloud Manager pipeline run (CM_* vars must be set)
   $PROG /full/path/to/aem-cm-project renovate/slf4j-monorepo --cloud-manager
+
+  # validate only, then quit without any change (no push/merge, no prompts)
+  $PROG /full/path/to/aem-cm-project renovate/babel --dry-run
 EOF
 }
 
@@ -183,11 +191,13 @@ run_cloud_manager_validation() {
 
 # Parse args: <repo-path> [branch] [action] plus optional flags (any order).
 CM_VALIDATE=0
+DRY_RUN="${DRY_RUN:-0}"   # may be preset via the environment (DRY_RUN=1)
 POSITIONAL=()
 for a in "$@"; do
   case "$a" in
     -h|--help)             usage; exit 0 ;;
     --cloud-manager|--cm)  CM_VALIDATE=1 ;;
+    --dry-run)             DRY_RUN=1 ;;
     -*)                    echo "error: unknown option '$a'" >&2; echo >&2; usage >&2; exit 1 ;;
     *)                     POSITIONAL+=("$a") ;;
   esac
@@ -274,18 +284,32 @@ echo ">> selected: $BRANCH"
 # Checkout the branch.
 git checkout "$BRANCH"
 
-# Build it locally.
+# Build it locally. Maven output is redirected to a per-branch log file under
+# .renovate-tmp/validation/ (instead of the console); on failure its path is printed.
 if [ "${SKIP_VERIFY:-}" = "1" ]; then
   echo ">> SKIP_VERIFY=1 — skipping 'mvn clean verify'"
 else
   MVN="mvn"; [ -x "./mvnw" ] && MVN="./mvnw"
-  echo ">> running: $MVN clean verify  (this can take a while)"
-  if ! "$MVN" clean verify; then
+  LOG_DIR="$SCRIPT_DIR/.renovate-tmp/validation"
+  mkdir -p "$LOG_DIR"
+  # Sanitize the branch name for use in a filename (renovate/foo -> renovate-foo).
+  LOG_FILE="$LOG_DIR/$(printf '%s' "$BRANCH" | sed 's#[^A-Za-z0-9._-]#-#g').log"
+  echo ">> running: $MVN clean verify  (output → $LOG_FILE; this can take a while)"
+  if ! "$MVN" clean verify > "$LOG_FILE" 2>&1; then
     echo >&2
     echo "error: 'mvn clean verify' FAILED for $BRANCH — aborting (nothing pushed or merged)." >&2
+    echo "       log: $LOG_FILE" >&2
     exit 1
   fi
-  echo ">> build OK."
+  echo ">> build OK.  (log: $LOG_FILE)"
+fi
+
+# Dry-run: validation only — quit without pushing, merging, or any CM run.
+if [ "$DRY_RUN" = 1 ]; then
+  echo
+  echo ">> DRY_RUN — validation complete for '$BRANCH'. No changes made"
+  echo "   (nothing pushed, merged, or sent to Cloud Manager). Branch is checked out locally."
+  exit 0
 fi
 
 # Decide the action: from the argument if given, otherwise ask.
