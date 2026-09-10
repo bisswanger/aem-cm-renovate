@@ -75,6 +75,11 @@
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "labels": ["dependencies", "major-update"]
+    },
+    {
+      "description": "Keep sling models in a version supported by AEM Cloud Service",
+      "matchPackageNames": ["org.apache.sling:org.apache.sling.models.impl"],
+      "allowedVersions": "<2.0.0"
     }
   ],
   "osvVulnerabilityAlerts": true
