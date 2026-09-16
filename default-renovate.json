@@ -17,6 +17,39 @@
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
+      "description": "Group npm devDependencies (minor + patch) into one auto-merged PR.",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm dev dependencies - fixes",
+      "automerge": true,
+      "matchPackageNames": [
+        "!/^cypress/"
+      ]
+    },
+    {
+      "description": "Group Maven test-scoped dependencies (minor + patch) into one auto-merged PR.",
+      "matchManagers": ["maven"],
+      "matchDepTypes": ["test"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "maven test dependencies - fixes",
+      "addLabels": ["mvn-validation-only"],
+      "automerge": true
+    },
+    {
+      "description": "Major updates are never automerged; label them so they stand out.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major-update"]
+    },
+    {
+      "description": "Group generic Maven plugins",
+      "matchManagers": ["maven"],
+      "matchPackageNames": ["org.apache.maven.plugins:**", "org.codehaus.mojo:**"],
+      "addLabels": ["mvn-validation-only"],
+      "groupName": "Maven plugins"
+    },
+    {
       "description": "Group all AEM Core Components into a single PR to cut noise.",
       "matchPackageNames": ["com.adobe.cq:core.wcm.components.**"],
       "groupName": "AEM Core Components"
@@ -53,33 +86,19 @@
       "automerge": true
     },
     {
-      "description": "Group npm devDependencies (minor + patch) into one auto-merged PR.",
-      "matchManagers": ["npm"],
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "npm dev dependencies - fixes",
-      "automerge": true,
-      "excludePackagePatterns": ["^cypress"]
-    },
-    {
-      "description": "Group Maven test-scoped dependencies (minor + patch) into one auto-merged PR.",
-      "matchManagers": ["maven"],
-      "matchDepTypes": ["test"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "maven test dependencies - fixes",
-      "addLabels": ["mvn-validation-only"],
-      "automerge": true
-    },
-    {
-      "description": "Major updates are never automerged; label them so they stand out.",
-      "matchUpdateTypes": ["major"],
-      "automerge": false,
-      "labels": ["dependencies", "major-update"]
-    },
-    {
       "description": "Keep sling models in a version supported by AEM Cloud Service",
       "matchPackageNames": ["org.apache.sling:org.apache.sling.models.impl"],
       "allowedVersions": "<2.0.0"
+    },
+    {
+      "description": "Some build tools don't support babel 8 yet",
+      "matchPackageNames": ["@babel/core"],
+      "allowedVersions": "<8.0.0"
+    },
+    {
+      "description": "Some build tools don't support TypeScript 6+7 yet",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.0.0"
     }
   ],
   "osvVulnerabilityAlerts": true
