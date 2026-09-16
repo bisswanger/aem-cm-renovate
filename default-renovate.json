@@ -34,7 +34,10 @@
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "maven test dependencies - fixes",
       "addLabels": ["mvn-validation-only"],
-      "automerge": true
+      "automerge": true,
+      "matchPackageNames": [
+        "!/^com.adobe.cq:core.wcm.components./"
+      ]
     },
     {
       "description": "Major updates are never automerged; label them so they stand out.",
