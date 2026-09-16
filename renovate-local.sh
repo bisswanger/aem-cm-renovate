@@ -92,6 +92,18 @@ rm -rf "$PUSH"; git clone -q "$REPO_DIR" "$PUSH"
   git push -q gitea "$BASE_BRANCH"
 )
 
+# Renovate looks up label IDs by name on Gitea and silently drops any label it
+# can't find (unlike GitHub/GitLab, it does not create missing labels). A fresh
+# Gitea repo starts with none, so every "labels"/"addLabels" entry in the config
+# would otherwise be dropped and PRs would always land with empty labels.
+echo ">> creating repo labels referenced by renovate.json..."
+while IFS= read -r label; do
+  [ -z "$label" ] && continue
+  curl -s -o /dev/null -X POST -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
+    "$GITEA_URL/api/v1/repos/$GITEA_USER/$REPO_NAME/labels" \
+    -d "{\"name\":\"$label\",\"color\":\"#ededed\"}"
+done < <(node "$SCRIPT_DIR/lib/collect-labels.js" "$PUSH/renovate.json")
+
 echo ">> [3/5] running Renovate (creates branches; PRs land only in disposable Gitea)..."
 # Optional: export GITHUB_COM_TOKEN before running for richer release notes /
 # changelogs in the reports (a read-only public-scope GitHub PAT is enough).

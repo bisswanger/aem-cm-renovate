@@ -8,7 +8,6 @@
     ":prImmediately",
     ":semanticPrefixFixDepsChoreOthers",
     ":updateNotScheduled",
-    ":automergeDisabled",
     ":prHourlyLimitNone"
   ],
   "labels": ["dependencies"],
