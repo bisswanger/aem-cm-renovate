@@ -127,11 +127,15 @@ fi
 # Cap on how many update branches+PRs Renovate may create in this run.
 #   LIMIT unset / 0  -> UNLIMITED: a branch/PR for EVERY available update (default).
 #   LIMIT=N          -> at most ~N branches+PRs.
-# We apply this via Renovate's `force` config (RENOVATE_FORCE) because a repo's own
-# renovate.json OVERRIDES plain env vars — `force` wins over everything, so the
-# limit is honored even when the target repo sets its own prConcurrentLimit.
+# Also force automerge off: this is a local dry-run against a disposable Gitea,
+# so nothing should ever actually merge, regardless of what default-renovate.json
+# or the repo's own renovate.json set per-packageRule (several rules here set
+# "automerge": true).
+# We apply both via Renovate's `force` config (RENOVATE_FORCE) because a repo's own
+# renovate.json OVERRIDES plain env vars — `force` wins over everything, so these
+# are honored even when the target repo sets its own prConcurrentLimit/automerge.
 LIMIT="${LIMIT:-0}"
-export RENOVATE_FORCE="{\"prConcurrentLimit\":$LIMIT,\"branchConcurrentLimit\":$LIMIT,\"prHourlyLimit\":0}"
+export RENOVATE_FORCE="{\"prConcurrentLimit\":$LIMIT,\"branchConcurrentLimit\":$LIMIT,\"prHourlyLimit\":0,\"automerge\":false}"
 LOG_LEVEL=info \
 RENOVATE_PLATFORM=gitea \
 RENOVATE_ENDPOINT="$GITEA_URL/api/v1" \
