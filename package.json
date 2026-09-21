@@ -6,7 +6,7 @@
     "postinstall": "aio plugins:install @adobe/aio-cli-plugin-cloudmanager || true"
   },
   "devDependencies": {
-    "@adobe/aio-cli": "11.1.2",
+    "@adobe/aio-cli": "11.1.4",
     "renovate": "44.105.1"
   }
 }
