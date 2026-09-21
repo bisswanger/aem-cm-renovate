@@ -4,6 +4,9 @@ Run [Renovate](https://docs.renovatebot.com/) **locally against Adobe Cloud Mana
 (CM) repositories** and push the dependency-update branches it produces to the CM
 remote, where the pipeline builds and deploys them.
 
+> This project was created as a reference implementation for the adaptTo() 2026
+> session [Securing AEM Customer Code: Automated Fixes for Vulnerabilities in Dependencies](https://adapt.to/2026/schedule/securing-aem-customer-code-automated-fixes-for-vulnerabilities-in-dependencies).
+
 ### Why local?
 
 Renovate is designed to run as a bot against a hosted git *platform*
